@@ -1057,10 +1057,6 @@ bool CClientPed::SetModel(unsigned long ulModel, bool bTemp)
 
 bool CClientPed::GetCanBeKnockedOffBike()
 {
-    if (m_pPlayerPed)
-    {
-        return !m_pPlayerPed->GetCantBeKnockedOffBike();
-    }
     return m_bCanBeKnockedOffBike;
 }
 
@@ -1068,7 +1064,11 @@ void CClientPed::SetCanBeKnockedOffBike(bool bCanBeKnockedOffBike)
 {
     if (m_pPlayerPed)
     {
-        m_pPlayerPed->SetCantBeKnockedOffBike((bCanBeKnockedOffBike) ? BIKE_KNOCK_OFF_DEFAULT : BIKE_KNOCK_OFF_NEVER);
+        // Remote players and peds we dont sync should never fall off bike
+        if (IsLocalPlayer() || IsSyncing())
+            m_pPlayerPed->SetCantBeKnockedOffBike((bCanBeKnockedOffBike) ? BIKE_KNOCK_OFF_DEFAULT : BIKE_KNOCK_OFF_NEVER);
+        else
+            m_pPlayerPed->SetCantBeKnockedOffBike(BIKE_KNOCK_OFF_NEVER);
     }
     m_bCanBeKnockedOffBike = bCanBeKnockedOffBike;
 }
@@ -1526,7 +1526,7 @@ void CClientPed::WarpIntoVehicle(CClientVehicle* pVehicle, unsigned int uiSeat)
 
     RemoveTargetPosition();
 
-    if (!pVehicle->IsStreamedIn() || !m_pPlayerPed)
+    if ((!pVehicle->IsStreamedIn() || !m_pPlayerPed) && IsLocalPlayer())
         SetWarpInToVehicleRequired(true);
 
     // Make peds stream in when they warp to a vehicle
@@ -3642,11 +3642,8 @@ void CClientPed::_CreateModel()
         m_pPlayerPed->SetLighting(m_fLighting);
         WorldIgnore(m_bWorldIgnored);
 
-        // Set remote players to not fall off bikes locally, let them decide
-        if (m_bIsLocalPlayer)
-            SetCanBeKnockedOffBike(m_bCanBeKnockedOffBike);
-        else
-            SetCanBeKnockedOffBike(false);
+        // Set fall off bike state again
+        SetCanBeKnockedOffBike(m_bCanBeKnockedOffBike);
 
         // Restore their weapons
         for (int i = 0; i < (int)WEAPONSLOT_MAX; i++)
@@ -4183,13 +4180,6 @@ void CClientPed::InternalWarpIntoVehicle(CVehicle* pGameVehicle)
             pInTask->ProcessPed(m_pPlayerPed);
             pInTask->Destroy();
             SetWarpInToVehicleRequired(false);
-        }
-
-        // If we're a remote player
-        if (!m_bIsLocalPlayer)
-        {
-            // Make sure we can't fall off
-            SetCanBeKnockedOffBike(false);
         }
     }
 }
@@ -7028,4 +7018,6 @@ void CClientPed::SetSyncing(bool bIsSyncing)
         // Reset vehicle in/out stuff in case the ped was entering/exiting
         ResetVehicleInOut();
     }
+
+    SetCanBeKnockedOffBike(m_bCanBeKnockedOffBike);
 }
